@@ -3,6 +3,7 @@ const CODE_HISTORY_KEY = 'operations-dashboard-code-history-v1';
 const LAST_CODE_REFRESH_KEY = 'operations-dashboard-last-code-refresh-v1';
 const CODE_REFRESH_MS = 30 * 60 * 1000;
 const REFRESHABLE_UNITS = new Set(['سين','سين 1','باء','باء 1','جيم 1','جيم 2']);
+const FIXED_REPORT_ORDER = ['قيادة','إشراف عام','مشرف ميداني','العمليات','نائب العمليات','سين 1','سين','باء 1','باء','جيم 1','جيم 2','دعم','الميناء','وحدات البحث والإنقاذ','تسجيل خروج'];
 let units = loadUnits();
 const $ = (id) => document.getElementById(id);
 
@@ -22,7 +23,7 @@ function saveCodeHistory(h){localStorage.setItem(CODE_HISTORY_KEY,JSON.stringify
 function now(){const d=new Date();return {date:d.toISOString().slice(0,10),time:d.toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'}),day:['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'][d.getDay()]};}
 function setNow(){const n=now();$('reportDate').value=n.date;$('reportTime').value=n.time;$('reportDay').value=n.day;updatePreview();}
 function addCode(index){units[index].codes.push('');syncUnitCode(index);saveUnits();renderUnits();const inputs=document.querySelectorAll(`[data-code-index="${index}"]`);inputs[inputs.length-1]?.focus();}
-function removeCode(index,codeIndex){if(units[index].codes.length<=1)return;units[index].codes.splice(codeIndex,1);if(units[index].name==='سين'&&units[index].codes.length<4)return;syncUnitCode(index);saveUnits();renderUnits();}
+function removeCode(index,codeIndex){if(units[index].codes.length<=1)return;if(units[index].name==='سين'&&units[index].codes.length<=4)return;units[index].codes.splice(codeIndex,1);syncUnitCode(index);saveUnits();renderUnits();}
 function syncUnitCode(index){units[index].code=units[index].codes.join(' / ');}
 function renderUnits(){
   const html=[];
@@ -70,7 +71,16 @@ function refreshCodes(showToast=true){
 }
 function updateRefreshStatus(){const el=$('codeRefreshStatus');if(!el)return;const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(!last){el.textContent='التحديث التلقائي كل 30 دقيقة';return;}const r=Math.max(0,CODE_REFRESH_MS-(Date.now()-last));if(!r){el.textContent='جاري تحديث الأكواد...';return;}el.textContent=`التحديث القادم بعد ${Math.floor(r/60000)}:${String(Math.floor(r%60000/1000)).padStart(2,'0')}`;}
 function checkAutoCodeRefresh(){const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(last&&Date.now()-last>=CODE_REFRESH_MS)refreshCodes(true);updateRefreshStatus();}
-function updatePreview(){const no=$('reportNo').value||'—',day=$('reportDay').value||'—',date=$('reportDate').value||'—',time=$('reportTime').value||'—';$('reportPreview').textContent=`تم تحديث تقرير عمليات ( ساندي و بوليتو ) رقم ( ${no} ) في تمام الساعه ( ${time} ) في يوم ( ${day} ) التاريخ ${date}\n\n`+units.map(u=>`: ${u.name} ${u.code||'—'}`).join('\n');}
+function updatePreview(){
+  const no=$('reportNo').value||'—',day=$('reportDay').value||'—',date=$('reportDate').value||'—',time=$('reportTime').value||'—';
+  const byName=new Map(units.map(u=>[u.name,u]));
+  const ordered=FIXED_REPORT_ORDER.map(name=>byName.get(name)).filter(Boolean);
+  const sections=ordered.map(u=>{
+    const codes=(Array.isArray(u.codes)?u.codes:[]).map(c=>String(c).trim()).filter(Boolean);
+    return `: ${u.name}${codes.length?'\n'+codes.join('\n'):' —'}`;
+  });
+  $('reportPreview').textContent=`تم تحديث تقرير عمليات ( ساندي و بوليتو ) رقم ( ${no} ) في تمام الساعه ( ${time} ) في يوم ( ${day} ) التاريخ ${date}\n\n`+sections.join('\n\n');
+}
 function escapeHtml(s){return String(s??'').replace(/[&<>"\\]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\\':'&#92;'}[c]||c));}
 function escapeAttr(s){return escapeHtml(s).replace(/'/g,'&#39;');}
 ['reportNo','reportDay','reportDate','reportTime'].forEach(id=>$(id).addEventListener('input',updatePreview));
