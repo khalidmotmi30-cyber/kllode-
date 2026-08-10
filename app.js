@@ -9,9 +9,9 @@ const $=id=>document.getElementById(id);
 function normalizeUnit(u){let codes=Array.isArray(u.codes)?u.codes.slice():String(u.code||'').split(' / ').filter(Boolean);if(!codes.length)codes=[''];return {...u,codes,code:codes.join(' / ')};}
 function loadUnits(){try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY));if(Array.isArray(saved))return saved.map(normalizeUnit);}catch(e){}return structuredClone(window.DEFAULT_UNITS).map(normalizeUnit);}
 function saveUnits(){localStorage.setItem(STORAGE_KEY,JSON.stringify(units));}
-function now(){const d=new Date();return{date:d.toISOString().slice(0,10),time24:d.toTimeString().slice(0,5),timeDisplay:d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}),day:['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'][d.getDay()]};}
+function now(){const d=new Date();return{date:d.toISOString().slice(0,10),time24:d.toTimeString().slice(0,5),day:['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'][d.getDay()]};}
 function formatEnglishDate(value){if(!value)return '—';const parts=value.split('-');if(parts.length!==3)return value;return `${parts[2]}/${parts[1]}/${parts[0]}`;}
-function formatEnglishTime(value){if(!value)return '—';const parts=value.split(':');if(parts.length<2)return value;let h=Number(parts[0]);const m=parts[1];if(Number.isNaN(h))return value;const suffix=h>=12?'PM':'AM';h=h%12||12;return `${String(h).padStart(2,'0')}:${m} ${suffix}`;}
+function formatArabicTime(value){if(!value)return '—';const parts=value.split(':');if(parts.length<2)return value;let h=Number(parts[0]);const m=parts[1];if(Number.isNaN(h))return value;const suffix=h>=12?'م':'ص';h=h%12||12;return `${String(h).padStart(2,'0')}:${m} ${suffix}`;}
 function setNow(){const n=now();$('reportDate').value=n.date;$('reportTime').value=n.time24;$('reportDay').value=n.day;updatePreview();}
 function addCode(index){units[index].codes.push('');syncUnitCode(index);saveUnits();renderUnits();const inputs=document.querySelectorAll(`[data-code-index="${index}"]`);inputs[inputs.length-1]?.focus();}
 function removeCode(index,codeIndex){const required=REFRESHABLE_CODE_COUNTS[units[index].name];if(required&&units[index].codes.length<=required)return;if(units[index].codes.length<=1)return;units[index].codes.splice(codeIndex,1);syncUnitCode(index);saveUnits();renderUnits();}
@@ -20,39 +20,11 @@ function renderUnits(){const html=[];units.forEach((raw,i)=>{const u=normalizeUn
 function handleLogoutCodeChange(index){const unit=units[index];if(unit.name!=='تسجيل خروج')return;const logoutCodes=new Set(unit.codes.map(c=>c.trim()).filter(Boolean));if(!logoutCodes.size)return;units.forEach((u,i)=>{if(i===index||!Array.isArray(u.codes))return;u.codes=u.codes.map(c=>logoutCodes.has(c.trim())?'':c);syncUnitCode(i);});}
 function renderAdmin(){$('adminList').innerHTML=units.map((u,i)=>`<div class="admin-row"><span>${i+1}</span><input data-index="${i}" data-field="name" value="${escapeAttr(u.name)}" /><input data-index="${i}" data-field="code" value="${escapeAttr(u.code||'')}" placeholder="E-000 / E-000" /><button data-delete="${i}">حذف</button></div>`).join('');document.querySelectorAll('#adminList input').forEach(el=>el.addEventListener('input',e=>{const i=+e.target.dataset.index,f=e.target.dataset.field;if(f==='code'){units[i].codes=e.target.value.split('/').map(s=>s.trim()).filter(Boolean);if(!units[i].codes.length)units[i].codes=[''];}units[i][f]=e.target.value;syncUnitCode(i);handleLogoutCodeChange(i);saveUnits();renderUnits();}));document.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>{units.splice(+b.dataset.delete,1);saveUnits();renderUnits();}));}
 function shuffle(arr){for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}return arr;}
-// التحديث ينقل الأكواد الموجودة فعلياً بين الوحدات المتحركة فقط. لا ينشئ كوداً جديداً ولا يحذف أي كود، ويحافظ على عدد الأكواد في كل وحدة.
-function refreshCodes(showToast=true){
-  units=units.map(normalizeUnit);
-  const active=units.filter(u=>REFRESHABLE_UNITS.has(u.name));
-  const slots=[];
-  active.forEach(u=>u.codes.forEach((code,index)=>{if(String(code||'').trim())slots.push({code:String(code).trim(),from:u.name,index});}));
-  if(slots.length>1){
-    let shuffled;
-    for(let attempt=0;attempt<100;attempt++){
-      shuffled=shuffle(slots.slice());
-      let valid=true;
-      let p=0;
-      for(const u of active){for(let i=0;i<u.codes.filter(c=>String(c||'').trim()).length;i++){if(shuffled[p++].from===u.name){valid=false;break;}}if(!valid)break;}
-      if(valid)break;
-    }
-    let p=0;
-    active.forEach(u=>{
-      const count=u.codes.filter(c=>String(c||'').trim()).length;
-      u.codes=[];
-      for(let i=0;i<count;i++)u.codes.push(shuffled[p++].code);
-    });
-    units.forEach((u,i)=>syncUnitCode(i));
-  }
-  saveUnits();
-  localStorage.setItem(LAST_CODE_REFRESH_KEY,String(Date.now()));
-  renderUnits();
-  updateRefreshStatus();
-  if(showToast)toast('تم نقل الأكواد الموجودة إلى أماكن جديدة بدون إضافة أو حذف');
-}
+function refreshCodes(showToast=true){units=units.map(normalizeUnit);const active=units.filter(u=>REFRESHABLE_UNITS.has(u.name));const slots=[];active.forEach(u=>u.codes.forEach((code,index)=>{if(String(code||'').trim())slots.push({code:String(code).trim(),from:u.name,index});}));if(slots.length>1){let shuffled;for(let attempt=0;attempt<100;attempt++){shuffled=shuffle(slots.slice());let valid=true,p=0;for(const u of active){for(let i=0;i<u.codes.filter(c=>String(c||'').trim()).length;i++){if(shuffled[p++].from===u.name){valid=false;break;}}if(!valid)break;}if(valid)break;}let p=0;active.forEach(u=>{const count=u.codes.filter(c=>String(c||'').trim()).length;u.codes=[];for(let i=0;i<count;i++)u.codes.push(shuffled[p++].code);});units.forEach((u,i)=>syncUnitCode(i));}saveUnits();localStorage.setItem(LAST_CODE_REFRESH_KEY,String(Date.now()));renderUnits();updateRefreshStatus();if(showToast)toast('تم نقل الأكواد الموجودة إلى أماكن جديدة بدون إضافة أو حذف');}
 function updateRefreshStatus(){const el=$('codeRefreshStatus');if(!el)return;const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(!last){el.textContent='التحديث كل 30 دقيقة — نقل الأكواد فقط';return;}const r=Math.max(0,CODE_REFRESH_MS-(Date.now()-last));if(!r){el.textContent='جاهز للتحديث — سيتم نقل الأكواد فقط';return;}el.textContent=`التحديث القادم بعد ${Math.floor(r/60000)}:${String(Math.floor(r%60000/1000)).padStart(2,'0')} — الأكواد لا تتغير`;}
 function checkAutoCodeRefresh(){const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(last&&Date.now()-last>=CODE_REFRESH_MS)refreshCodes(true);updateRefreshStatus();}
 function formatReportSection(unit){const codes=(Array.isArray(unit.codes)?unit.codes:[]).map(c=>String(c).trim()).filter(Boolean);if(!codes.length)return `${unit.name}: —`;return `${unit.name}:\n${codes.join('\n')}`;}
-function updatePreview(){const no=$('reportNo').value||'—',day=$('reportDay').value||'—',date=formatEnglishDate($('reportDate').value),time=formatEnglishTime($('reportTime').value);const byName=new Map(units.map(u=>[u.name,u]));const ordered=FIXED_REPORT_ORDER.map(name=>byName.get(name)).filter(Boolean);$('reportPreview').textContent=`تم تحديث تقرير عمليات ( ساندي و بوليتو ) رقم ( ${no} ) في تمام الساعه ( ${time} ) في يوم ( ${day} ) التاريخ ${date}\n\n`+ordered.map(formatReportSection).join('\n\n');}
+function updatePreview(){const no=$('reportNo').value||'—',day=$('reportDay').value||'—',date=formatEnglishDate($('reportDate').value),time=formatArabicTime($('reportTime').value);const byName=new Map(units.map(u=>[u.name,u]));const ordered=FIXED_REPORT_ORDER.map(name=>byName.get(name)).filter(Boolean);$('reportPreview').textContent=`تم تحديث تقرير عمليات ( ساندي و بوليتو ) رقم ( ${no} ) في تمام الساعه ( ${time} ) في يوم ( ${day} ) التاريخ ${date}\n\n`+ordered.map(formatReportSection).join('\n\n');}
 function escapeHtml(s){return String(s??'').replace(/[&<>"\\]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\\':'&#92;'}[c]||c));}
 function escapeAttr(s){return escapeHtml(s).replace(/'/g,'&#39;');}
 ['reportNo','reportDay','reportDate','reportTime'].forEach(id=>$(id).addEventListener('input',updatePreview));
