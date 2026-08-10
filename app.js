@@ -73,8 +73,8 @@ function updateRefreshStatus(){const el=$('codeRefreshStatus');if(!el)return;con
 function checkAutoCodeRefresh(){const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(last&&Date.now()-last>=CODE_REFRESH_MS)refreshCodes(true);updateRefreshStatus();}
 function formatReportSection(unit){
   const codes=(Array.isArray(unit.codes)?unit.codes:[]).map(c=>String(c).trim()).filter(Boolean);
-  if(!codes.length) return `: ${unit.name} —`;
-  return `: ${unit.name}:\n${codes.join('\n')}`;
+  if(!codes.length) return `${unit.name}: —`;
+  return `${unit.name}:\n${codes.join('\n')}`;
 }
 function updatePreview(){
   const no=$('reportNo').value||'—',day=$('reportDay').value||'—',date=$('reportDate').value||'—',time=$('reportTime').value||'—';
