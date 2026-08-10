@@ -5,6 +5,7 @@ const CODE_REFRESH_MS = 30 * 60 * 1000;
 const REFRESHABLE_UNITS = new Set(['سين','سين 1','باء','باء 1','جيم 1','جيم 2']);
 const REFRESHABLE_CODE_COUNTS = {'سين 1':5,'سين':4,'باء 1':4,'باء':4,'جيم 1':3,'جيم 2':3};
 const FIXED_REPORT_ORDER = ['قيادة','إشراف عام','مشرف ميداني','العمليات','نائب العمليات','سين 1','سين','باء 1','باء','جيم 1','جيم 2','دعم','الميناء','وحدات البحث والإنقاذ','تسجيل خروج'];
+const CODE_PREFIXES = ['E','P','R','H','G'];
 let units = loadUnits();
 const $ = (id) => document.getElementById(id);
 function normalizeUnit(u){let codes=Array.isArray(u.codes)?u.codes.slice():String(u.code||'').split(' / ').filter(Boolean);if(!codes.length)codes=[''];const required=REFRESHABLE_CODE_COUNTS[u.name];if(required)while(codes.length<required)codes.push('');return {...u,codes,code:codes.join(' / ')};}
@@ -21,51 +22,39 @@ function renderUnits(){const html=[];units.forEach((raw,i)=>{const u=normalizeUn
 function handleLogoutCodeChange(index){const unit=units[index];if(unit.name!=='تسجيل خروج')return;const logoutCodes=new Set(unit.codes.map(c=>c.trim()).filter(Boolean));if(!logoutCodes.size)return;units.forEach((u,i)=>{if(i===index||!Array.isArray(u.codes))return;u.codes=u.codes.map(c=>logoutCodes.has(c.trim())?'':c);syncUnitCode(i);});}
 function renderAdmin(){$('adminList').innerHTML=units.map((u,i)=>`<div class="admin-row"><span>${i+1}</span><input data-index="${i}" data-field="name" value="${escapeAttr(u.name)}" /><input data-index="${i}" data-field="code" value="${escapeAttr(u.code||'')}" placeholder="E-000 / E-000" /><button data-delete="${i}">حذف</button></div>`).join('');document.querySelectorAll('#adminList input').forEach(el=>el.addEventListener('input',e=>{const i=+e.target.dataset.index,f=e.target.dataset.field;if(f==='code'){units[i].codes=e.target.value.split('/').map(s=>s.trim()).filter(Boolean);if(!units[i].codes.length)units[i].codes=[''];units[i]=normalizeUnit(units[i]);}units[i][f]=e.target.value;syncUnitCode(i);handleLogoutCodeChange(i);saveUnits();renderUnits();}));document.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>{units.splice(+b.dataset.delete,1);saveUnits();renderUnits();}));}
 
-// Keep the exact prefix written for each code. P/R/H/G will never turn into E.
-function codePrefix(code){
-  const value=String(code||'').trim().toUpperCase();
-  const m=value.match(/^([A-Z]+)-/);
-  return m ? m[1] : 'E';
-}
+// عند تحديث الأكواد يتغير الحرف والرقم معاً، مع منع التكرار وعدم حذف أي كود.
+function randomPrefix(){return CODE_PREFIXES[Math.floor(Math.random()*CODE_PREFIXES.length)];}
 function codeNumber(prefix){return `${prefix}-${String(Math.floor(Math.random()*999)+1).padStart(3,'0')}`;}
-function nextUniqueCode(prefix,used,history){
-  prefix=String(prefix||'E').toUpperCase();
-  for(let t=0;t<3000;t++){
+function nextUniqueCode(used,history){
+  for(let t=0;t<5000;t++){
+    const prefix=randomPrefix();
     const c=codeNumber(prefix);
     if(!used.has(c)&&!history.includes(c))return c;
   }
-  for(let n=1;n<=999;n++){
-    const c=`${prefix}-${String(n).padStart(3,'0')}`;
-    if(!used.has(c)&&!history.includes(c))return c;
+  for(const prefix of CODE_PREFIXES){
+    for(let n=1;n<=999;n++){
+      const c=`${prefix}-${String(n).padStart(3,'0')}`;
+      if(!used.has(c)&&!history.includes(c))return c;
+    }
   }
-  // Extremely unlikely fallback: still preserve the original prefix.
-  return `${prefix}-001`;
+  return `E-${String(Math.floor(Math.random()*999)+1).padStart(3,'0')}`;
 }
 function refreshCodes(showToast=true){
   const history=loadCodeHistory(),used=new Set();
-
-  // Do not reorder units and do not touch fixed positions.
+  // ترتيب الوحدات ثابت، والتحديث يلمس فقط الوحدات القابلة للتحديث.
   units=units.map(normalizeUnit);
-
-  // Reserve every existing code first so a refresh cannot duplicate a code.
-  units.forEach(u=>u.codes.forEach(c=>{
-    const value=String(c||'').trim().toUpperCase();
-    if(value)used.add(value);
-  }));
-
+  // حجز الأكواد الحالية حتى لا ينتج التحديث أي تكرار.
+  units.forEach(u=>u.codes.forEach(c=>{const value=String(c||'').trim().toUpperCase();if(value)used.add(value);}));
   units.forEach(u=>{
     if(!REFRESHABLE_UNITS.has(u.name))return;
     const required=REFRESHABLE_CODE_COUNTS[u.name]||u.codes.length;
     while(u.codes.length<required)u.codes.push('');
-
     const key=u.name||'وحدة';
     const previous=Array.isArray(history[key])?history[key]:[];
     const oldCodes=u.codes.slice(0,required);
-    const newCodes=oldCodes.map(oldCode=>{
-      // The prefix is taken from THIS exact slot before generating its new number.
-      // Therefore P-, R-, H-, G-, or any other prefix stays the same.
-      const prefix=codePrefix(oldCode);
-      const next=nextUniqueCode(prefix,used,previous);
+    // كل تحديث يغيّر الحرف والرقم معاً (E/P/R/H/G)، مع بقاء عدد الخانات كما هو.
+    const newCodes=oldCodes.map(()=>{
+      const next=nextUniqueCode(used,previous);
       used.add(next);
       return next;
     });
@@ -73,13 +62,12 @@ function refreshCodes(showToast=true){
     syncUnitCode(units.indexOf(u));
     history[key]=[...previous,...newCodes].slice(-120);
   });
-
   saveCodeHistory(history);
   saveUnits();
   localStorage.setItem(LAST_CODE_REFRESH_KEY,String(Date.now()));
   renderUnits();
   updateRefreshStatus();
-  if(showToast)toast('تم تحديث الأكواد بدون حذف، مع الحفاظ على نوع كل كود P / R / H / G وبدون تكرار');
+  if(showToast)toast('تم تحديث الحرف والرقم معاً بدون حذف أو تكرار');
 }
 function updateRefreshStatus(){const el=$('codeRefreshStatus');if(!el)return;const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(!last){el.textContent='التحديث التلقائي كل 30 دقيقة';return;}const r=Math.max(0,CODE_REFRESH_MS-(Date.now()-last));if(!r){el.textContent='جاري تحديث الأكواد...';return;}el.textContent=`التحديث القادم بعد ${Math.floor(r/60000)}:${String(Math.floor(r%60000/1000)).padStart(2,'0')}`;}
 function checkAutoCodeRefresh(){const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(last&&Date.now()-last>=CODE_REFRESH_MS)refreshCodes(true);updateRefreshStatus();}
