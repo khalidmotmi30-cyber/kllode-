@@ -6,8 +6,10 @@ let units = loadUnits();
 const $ = (id) => document.getElementById(id);
 
 function normalizeUnit(u){
-  const codes = Array.isArray(u.codes) ? u.codes : String(u.code || '').split(' / ').filter(Boolean);
-  return {...u, codes: codes.length ? codes : [''], code: codes.join(' / ')};
+  let codes = Array.isArray(u.codes) ? u.codes : String(u.code || '').split(' / ').filter(Boolean);
+  if (!codes.length) codes = [''];
+  if (u.name === 'سين' && codes.length < 4) codes = [...codes, ...Array(4 - codes.length).fill('')];
+  return {...u, codes, code: codes.join(' / ')};
 }
 function loadUnits(){
   try { const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)); if(Array.isArray(saved)) return saved.map(normalizeUnit); } catch(e){}
@@ -19,13 +21,13 @@ function saveCodeHistory(h){localStorage.setItem(CODE_HISTORY_KEY,JSON.stringify
 function now(){const d=new Date();return {date:d.toISOString().slice(0,10),time:d.toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'}),day:['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'][d.getDay()]};}
 function setNow(){const n=now();$('reportDate').value=n.date;$('reportTime').value=n.time;$('reportDay').value=n.day;updatePreview();}
 function addCode(index){units[index].codes.push('');syncUnitCode(index);saveUnits();renderUnits();const inputs=document.querySelectorAll(`[data-code-index="${index}"]`);inputs[inputs.length-1]?.focus();}
-function removeCode(index,codeIndex){if(units[index].codes.length<=1)return;units[index].codes.splice(codeIndex,1);syncUnitCode(index);saveUnits();renderUnits();}
+function removeCode(index,codeIndex){if(units[index].codes.length<=1)return;units[index].codes.splice(codeIndex,1);if(units[index].name==='سين'&&units[index].codes.length<4)return;syncUnitCode(index);saveUnits();renderUnits();}
 function syncUnitCode(index){units[index].code=units[index].codes.join(' / ');}
 function renderUnits(){
   const html=[];
   units.forEach((u,i)=>{
     u=normalizeUnit(u); units[i]=u;
-    html.push(`<div class="unit-row"><div class="unit-name-wrap"><span class="unit-name">${escapeHtml(u.name)}</span><button class="add-inline" data-add-code="${i}" title="إضافة كود">＋</button></div><div class="codes-stack">${u.codes.map((code,j)=>`<div class="code-line"><input class="unit-code-input" data-code-index="${i}" data-code-item="${j}" value="${escapeAttr(code)}" placeholder="E-000" aria-label="كود ${escapeAttr(u.name)} ${j+1}" />${u.codes.length>1?`<button class="remove-code" data-remove-code="${i}" data-remove-item="${j}" title="حذف الكود">×</button>`:''}</div>`).join('')}</div></div>`);
+    html.push(`<div class="unit-row"><div class="unit-name-wrap"><span class="unit-name">${escapeHtml(u.name)}</span></div><div class="codes-stack">${u.codes.map((code,j)=>`<div class="code-line"><input class="unit-code-input" data-code-index="${i}" data-code-item="${j}" value="${escapeAttr(code)}" placeholder="E-000" aria-label="كود ${escapeAttr(u.name)} ${j+1}" />${u.codes.length>1 && !(u.name==='سين' && u.codes.length<=4)?`<button class="remove-code" data-remove-code="${i}" data-remove-item="${j}" title="حذف الكود">×</button>`:''}</div>`).join('')}</div><div class="unit-add-row"><button class="add-inline" data-add-code="${i}" title="إضافة كود">＋ إضافة كود</button></div></div>`);
   });
   $('unitList').innerHTML=html.join('');
   document.querySelectorAll('[data-code-index]').forEach(input=>input.addEventListener('input',e=>{const i=+e.target.dataset.codeIndex,j=+e.target.dataset.codeItem;units[i].codes[j]=e.target.value.trim();syncUnitCode(i);saveUnits();updatePreview();}));
@@ -48,7 +50,7 @@ function refreshCodes(showToast=true){
 function updateRefreshStatus(){const el=$('codeRefreshStatus');if(!el)return;const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(!last){el.textContent='التحديث التلقائي كل 30 دقيقة';return;}const r=Math.max(0,CODE_REFRESH_MS-(Date.now()-last));if(!r){el.textContent='جاري تحديث الأكواد...';return;}el.textContent=`التحديث القادم بعد ${Math.floor(r/60000)}:${String(Math.floor(r%60000/1000)).padStart(2,'0')}`;}
 function checkAutoCodeRefresh(){const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(last&&Date.now()-last>=CODE_REFRESH_MS)refreshCodes(true);updateRefreshStatus();}
 function updatePreview(){const no=$('reportNo').value||'—',day=$('reportDay').value||'—',date=$('reportDate').value||'—',time=$('reportTime').value||'—';$('reportPreview').textContent=`تم تحديث تقرير عمليات ( ساندي و بوليتو ) رقم ( ${no} ) في تمام الساعه ( ${time} ) في يوم ( ${day} ) التاريخ ${date}\n\n`+units.map(u=>`: ${u.name} ${u.code||'—'}`).join('\n');}
-function escapeHtml(s){return String(s??'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\\':'&#92;','"':'&quot;'}[c]);}
+function escapeHtml(s){return String(s??'').replace(/[&<>"\\]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\\':'&#92;'}[c]||c));}
 function escapeAttr(s){return escapeHtml(s).replace(/'/g,'&#39;');}
 ['reportNo','reportDay','reportDate','reportTime'].forEach(id=>$(id).addEventListener('input',updatePreview));
 $('refreshTime').addEventListener('click',setNow);$('refreshCodes').addEventListener('click',()=>refreshCodes(true));
