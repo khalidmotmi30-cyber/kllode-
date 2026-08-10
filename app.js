@@ -2,6 +2,7 @@ const STORAGE_KEY = 'operations-dashboard-units-v1';
 const CODE_HISTORY_KEY = 'operations-dashboard-code-history-v1';
 const LAST_CODE_REFRESH_KEY = 'operations-dashboard-last-code-refresh-v1';
 const CODE_REFRESH_MS = 30 * 60 * 1000;
+const REFRESHABLE_UNITS = new Set(['سين','سين 1','باء','باء 1','جيم 1','جيم 2']);
 let units = loadUnits();
 const $ = (id) => document.getElementById(id);
 
@@ -44,8 +45,19 @@ function codeNumber(){return `E-${String(Math.floor(Math.random()*999)+1).padSta
 function nextUniqueCode(used,history){for(let t=0;t<3000;t++){const c=codeNumber();if(!used.has(c)&&!history.includes(c))return c;}return codeNumber();}
 function refreshCodes(showToast=true){
   const history=loadCodeHistory(),used=new Set();
-  units.forEach(u=>{const key=u.name||'وحدة',previous=Array.isArray(history[key])?history[key]:[];u.codes=u.codes.map(()=>nextUniqueCode(used,previous));u.codes.forEach(c=>used.add(c));syncUnitCode(units.indexOf(u));history[key]=[...previous,...u.codes].slice(-120);});
-  saveCodeHistory(history);saveUnits();localStorage.setItem(LAST_CODE_REFRESH_KEY,String(Date.now()));renderUnits();updateRefreshStatus();if(showToast)toast('تم تحديث الأكواد بدون تكرار');
+  units.forEach(u=>u.codes.forEach(c=>{if(c)used.add(c);}));
+  units.forEach((u,index)=>{
+    // فقط الوحدات التشغيلية التالية تتغير عند تحديث الأكواد:
+    // سين، سين 1، باء، باء 1، جيم 1، جيم 2.
+    // القيادة والإشراف والعمليات ونائب العمليات والدعم والميناء والبحث والإنقاذ وتسجيل الخروج تبقى كما هي.
+    if(!REFRESHABLE_UNITS.has(u.name)) return;
+    const key=u.name||'وحدة',previous=Array.isArray(history[key])?history[key]:[];
+    u.codes=u.codes.map(()=>nextUniqueCode(used,previous));
+    u.codes.forEach(c=>used.add(c));
+    syncUnitCode(index);
+    history[key]=[...previous,...u.codes].slice(-120);
+  });
+  saveCodeHistory(history);saveUnits();localStorage.setItem(LAST_CODE_REFRESH_KEY,String(Date.now()));renderUnits();updateRefreshStatus();if(showToast)toast('تم تحديث أكواد الوحدات التشغيلية فقط');
 }
 function updateRefreshStatus(){const el=$('codeRefreshStatus');if(!el)return;const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(!last){el.textContent='التحديث التلقائي كل 30 دقيقة';return;}const r=Math.max(0,CODE_REFRESH_MS-(Date.now()-last));if(!r){el.textContent='جاري تحديث الأكواد...';return;}el.textContent=`التحديث القادم بعد ${Math.floor(r/60000)}:${String(Math.floor(r%60000/1000)).padStart(2,'0')}`;}
 function checkAutoCodeRefresh(){const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(last&&Date.now()-last>=CODE_REFRESH_MS)refreshCodes(true);updateRefreshStatus();}
