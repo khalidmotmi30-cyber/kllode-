@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="لوحة تحكم نائب العمليات" />
+  <title>لوحة نائب العمليات</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">ع</div>
+        <div><strong>نائب العمليات</strong><span>Operations Dashboard</span></div>
+      </div>
+      <nav>
+        <button class="nav-btn active" data-view="report">📋 التقرير الرئيسي</button>
+        <button class="nav-btn" data-view="units">🧩 إدارة الوحدات</button>
+      </nav>
+      <div class="sidebar-footer">نظام إدارة تقارير العمليات</div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">لوحة التحكم</div>
+          <h1 id="pageTitle">التقرير الرئيسي</h1>
+        </div>
+        <div class="status"><span></span> النظام يعمل</div>
+      </header>
+
+      <section id="reportView" class="view active">
+        <div class="hero card">
+          <div>
+            <span class="eyebrow">تقرير عمليات</span>
+            <h2>ساندي و بوليتو</h2>
+            <p>أنشئ التقرير وعدّل بيانات الوحدات ثم انسخه جاهزًا للإرسال.</p>
+          </div>
+          <button id="copyReport" class="primary">نسخ التقرير</button>
+        </div>
+
+        <div class="grid form-grid">
+          <label class="field"><span>رقم التقرير</span><input id="reportNo" placeholder="مثال: 25" /></label>
+          <label class="field"><span>اليوم</span><input id="reportDay" placeholder="مثال: الثلاثاء" /></label>
+          <label class="field"><span>التاريخ</span><input id="reportDate" type="date" /></label>
+          <label class="field"><span>الوقت</span><input id="reportTime" type="time" /></label>
+        </div>
+
+        <div class="card report-card">
+          <div class="section-head"><div><span class="eyebrow">المحتوى</span><h3>تقرير العمليات</h3></div><button id="refreshTime" class="ghost">تحديث الوقت الآن</button></div>
+          <div id="unitList" class="unit-list"></div>
+        </div>
+
+        <div class="card preview-card">
+          <div class="section-head"><div><span class="eyebrow">المعاينة</span><h3>النص الجاهز</h3></div></div>
+          <pre id="reportPreview"></pre>
+        </div>
+      </section>
+
+      <section id="unitsView" class="view">
+        <div class="card">
+          <div class="section-head"><div><span class="eyebrow">الإعدادات</span><h2>إدارة الوحدات والأكواد</h2></div><button id="addUnit" class="primary">+ إضافة وحدة</button></div>
+          <p class="muted">التعديلات تحفظ على هذا المتصفح. ولتغيير القيم الافتراضية للموقع لجميع المستخدمين، عدّل ملف <code>data.js</code> في GitHub.</p>
+          <div id="adminList" class="admin-list"></div>
+          <div class="actions"><button id="resetUnits" class="danger ghost">إعادة الوحدات الافتراضية</button></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
