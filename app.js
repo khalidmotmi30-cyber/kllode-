@@ -17,16 +17,37 @@ function syncUnitCode(index){units[index].code=units[index].codes.join(' / ');}
 function renderUnits(){const html=[];units.forEach((raw,i)=>{const u=normalizeUnit(raw);units[i]=u;html.push(`<div class="unit-row"><div class="unit-name-wrap"><span class="unit-name">${escapeHtml(u.name)}</span></div><div class="codes-stack">${u.codes.map((code,j)=>`<div class="code-line"><input class="unit-code-input" data-code-index="${i}" data-code-item="${j}" value="${escapeAttr(code)}" placeholder="E-000" aria-label="كود ${escapeAttr(u.name)} ${j+1}" />${u.codes.length>1&&!(REFRESHABLE_CODE_COUNTS[u.name]&&u.codes.length<=REFRESHABLE_CODE_COUNTS[u.name])?`<button class="remove-code" data-remove-code="${i}" data-remove-item="${j}" title="حذف الكود">×</button>`:''}</div>`).join('')}</div><div class="unit-add-row"><button class="add-inline" data-add-code="${i}" title="إضافة كود">＋ إضافة كود</button></div></div>`);});$('unitList').innerHTML=html.join('');document.querySelectorAll('[data-code-index]').forEach(input=>input.addEventListener('input',e=>{const i=+e.target.dataset.codeIndex,j=+e.target.dataset.codeItem;units[i].codes[j]=e.target.value.trim();syncUnitCode(i);handleLogoutCodeChange(i);saveUnits();updatePreview();}));document.querySelectorAll('[data-add-code]').forEach(b=>b.addEventListener('click',()=>addCode(+b.dataset.addCode)));document.querySelectorAll('[data-remove-code]').forEach(b=>b.addEventListener('click',()=>removeCode(+b.dataset.removeCode,+b.dataset.removeItem)));renderAdmin();updatePreview();}
 function handleLogoutCodeChange(index){const unit=units[index];if(unit.name!=='تسجيل خروج')return;const logoutCodes=new Set(unit.codes.map(c=>c.trim()).filter(Boolean));if(!logoutCodes.size)return;units.forEach((u,i)=>{if(i===index||!Array.isArray(u.codes))return;u.codes=u.codes.map(c=>logoutCodes.has(c.trim())?'':c);syncUnitCode(i);});}
 function renderAdmin(){$('adminList').innerHTML=units.map((u,i)=>`<div class="admin-row"><span>${i+1}</span><input data-index="${i}" data-field="name" value="${escapeAttr(u.name)}" /><input data-index="${i}" data-field="code" value="${escapeAttr(u.code||'')}" placeholder="E-000 / E-000" /><button data-delete="${i}">حذف</button></div>`).join('');document.querySelectorAll('#adminList input').forEach(el=>el.addEventListener('input',e=>{const i=+e.target.dataset.index,f=e.target.dataset.field;if(f==='code'){units[i].codes=e.target.value.split('/').map(s=>s.trim()).filter(Boolean);if(!units[i].codes.length)units[i].codes=[''];}units[i][f]=e.target.value;syncUnitCode(i);handleLogoutCodeChange(i);saveUnits();renderUnits();}));document.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>{units.splice(+b.dataset.delete,1);saveUnits();renderUnits();}));}
-// تحديث التقرير لا يولّد أكواد ولا يغيّر الأكواد الموجودة. الأكواد التي يدخلها المستخدم هي المصدر الوحيد.
+function shuffle(arr){for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}return arr;}
+// التحديث ينقل الأكواد الموجودة فعلياً بين الوحدات المتحركة فقط. لا ينشئ كوداً جديداً ولا يحذف أي كود، ويحافظ على عدد الأكواد في كل وحدة.
 function refreshCodes(showToast=true){
   units=units.map(normalizeUnit);
+  const active=units.filter(u=>REFRESHABLE_UNITS.has(u.name));
+  const slots=[];
+  active.forEach(u=>u.codes.forEach((code,index)=>{if(String(code||'').trim())slots.push({code:String(code).trim(),from:u.name,index});}));
+  if(slots.length>1){
+    let shuffled;
+    for(let attempt=0;attempt<100;attempt++){
+      shuffled=shuffle(slots.slice());
+      let valid=true;
+      let p=0;
+      for(const u of active){for(let i=0;i<u.codes.filter(c=>String(c||'').trim()).length;i++){if(shuffled[p++].from===u.name){valid=false;break;}}if(!valid)break;}
+      if(valid)break;
+    }
+    let p=0;
+    active.forEach(u=>{
+      const count=u.codes.filter(c=>String(c||'').trim()).length;
+      u.codes=[];
+      for(let i=0;i<count;i++)u.codes.push(shuffled[p++].code);
+    });
+    units.forEach((u,i)=>syncUnitCode(i));
+  }
   saveUnits();
   localStorage.setItem(LAST_CODE_REFRESH_KEY,String(Date.now()));
   renderUnits();
   updateRefreshStatus();
-  if(showToast)toast('تم تحديث التقرير مع الحفاظ على جميع الأكواد كما هي');
+  if(showToast)toast('تم نقل الأكواد الموجودة إلى أماكن جديدة بدون إضافة أو حذف');
 }
-function updateRefreshStatus(){const el=$('codeRefreshStatus');if(!el)return;const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(!last){el.textContent='التحديث كل 30 دقيقة بدون تغيير الأكواد';return;}const r=Math.max(0,CODE_REFRESH_MS-(Date.now()-last));if(!r){el.textContent='جاهز للتحديث — الأكواد لن تتغير';return;}el.textContent=`التحديث القادم بعد ${Math.floor(r/60000)}:${String(Math.floor(r%60000/1000)).padStart(2,'0')} — الأكواد ثابتة`;}
+function updateRefreshStatus(){const el=$('codeRefreshStatus');if(!el)return;const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(!last){el.textContent='التحديث كل 30 دقيقة — نقل الأكواد فقط';return;}const r=Math.max(0,CODE_REFRESH_MS-(Date.now()-last));if(!r){el.textContent='جاهز للتحديث — سيتم نقل الأكواد فقط';return;}el.textContent=`التحديث القادم بعد ${Math.floor(r/60000)}:${String(Math.floor(r%60000/1000)).padStart(2,'0')} — الأكواد لا تتغير`;}
 function checkAutoCodeRefresh(){const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(last&&Date.now()-last>=CODE_REFRESH_MS)refreshCodes(true);updateRefreshStatus();}
 function formatReportSection(unit){const codes=(Array.isArray(unit.codes)?unit.codes:[]).map(c=>String(c).trim()).filter(Boolean);if(!codes.length)return `${unit.name}: —`;return `${unit.name}:\n${codes.join('\n')}`;}
 function updatePreview(){const no=$('reportNo').value||'—',day=$('reportDay').value||'—',date=$('reportDate').value||'—',time=$('reportTime').value||'—';const byName=new Map(units.map(u=>[u.name,u]));const ordered=FIXED_REPORT_ORDER.map(name=>byName.get(name)).filter(Boolean);$('reportPreview').textContent=`تم تحديث تقرير عمليات ( ساندي و بوليتو ) رقم ( ${no} ) في تمام الساعه ( ${time} ) في يوم ( ${day} ) التاريخ ${date}\n\n`+ordered.map(formatReportSection).join('\n\n');}
