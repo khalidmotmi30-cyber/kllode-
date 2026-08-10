@@ -20,10 +20,67 @@ function syncUnitCode(index){units[index].code=units[index].codes.join(' / ');}
 function renderUnits(){const html=[];units.forEach((raw,i)=>{const u=normalizeUnit(raw);units[i]=u;html.push(`<div class="unit-row"><div class="unit-name-wrap"><span class="unit-name">${escapeHtml(u.name)}</span></div><div class="codes-stack">${u.codes.map((code,j)=>`<div class="code-line"><input class="unit-code-input" data-code-index="${i}" data-code-item="${j}" value="${escapeAttr(code)}" placeholder="E-000" aria-label="كود ${escapeAttr(u.name)} ${j+1}" />${u.codes.length>1&&!(REFRESHABLE_CODE_COUNTS[u.name]&&u.codes.length<=REFRESHABLE_CODE_COUNTS[u.name])?`<button class="remove-code" data-remove-code="${i}" data-remove-item="${j}" title="حذف الكود">×</button>`:''}</div>`).join('')}</div><div class="unit-add-row"><button class="add-inline" data-add-code="${i}" title="إضافة كود">＋ إضافة كود</button></div></div>`);});$('unitList').innerHTML=html.join('');document.querySelectorAll('[data-code-index]').forEach(input=>input.addEventListener('input',e=>{const i=+e.target.dataset.codeIndex,j=+e.target.dataset.codeItem;units[i].codes[j]=e.target.value.trim();syncUnitCode(i);handleLogoutCodeChange(i);saveUnits();updatePreview();}));document.querySelectorAll('[data-add-code]').forEach(b=>b.addEventListener('click',()=>addCode(+b.dataset.addCode)));document.querySelectorAll('[data-remove-code]').forEach(b=>b.addEventListener('click',()=>removeCode(+b.dataset.removeCode,+b.dataset.removeItem)));renderAdmin();updatePreview();}
 function handleLogoutCodeChange(index){const unit=units[index];if(unit.name!=='تسجيل خروج')return;const logoutCodes=new Set(unit.codes.map(c=>c.trim()).filter(Boolean));if(!logoutCodes.size)return;units.forEach((u,i)=>{if(i===index||!Array.isArray(u.codes))return;u.codes=u.codes.map(c=>logoutCodes.has(c.trim())?'':c);syncUnitCode(i);});}
 function renderAdmin(){$('adminList').innerHTML=units.map((u,i)=>`<div class="admin-row"><span>${i+1}</span><input data-index="${i}" data-field="name" value="${escapeAttr(u.name)}" /><input data-index="${i}" data-field="code" value="${escapeAttr(u.code||'')}" placeholder="E-000 / E-000" /><button data-delete="${i}">حذف</button></div>`).join('');document.querySelectorAll('#adminList input').forEach(el=>el.addEventListener('input',e=>{const i=+e.target.dataset.index,f=e.target.dataset.field;if(f==='code'){units[i].codes=e.target.value.split('/').map(s=>s.trim()).filter(Boolean);if(!units[i].codes.length)units[i].codes=[''];units[i]=normalizeUnit(units[i]);}units[i][f]=e.target.value;syncUnitCode(i);handleLogoutCodeChange(i);saveUnits();renderUnits();}));document.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>{units.splice(+b.dataset.delete,1);saveUnits();renderUnits();}));}
-function codePrefix(code){const m=String(code||'').trim().match(/^([A-Za-z]+)-/);return m?m[1].toUpperCase():'E';}
+
+// Keep the exact prefix written for each code. P/R/H/G will never turn into E.
+function codePrefix(code){
+  const value=String(code||'').trim().toUpperCase();
+  const m=value.match(/^([A-Z]+)-/);
+  return m ? m[1] : 'E';
+}
 function codeNumber(prefix){return `${prefix}-${String(Math.floor(Math.random()*999)+1).padStart(3,'0')}`;}
-function nextUniqueCode(prefix,used,history){for(let t=0;t<3000;t++){const c=codeNumber(prefix);if(!used.has(c)&&!history.includes(c))return c;}for(let n=1;n<=999;n++){const c=`${prefix}-${String(n).padStart(3,'0')}`;if(!used.has(c)&&!history.includes(c))return c;}return `${prefix}-001`;}
-function refreshCodes(showToast=true){const history=loadCodeHistory(),used=new Set();units.forEach((raw,i)=>{units[i]=normalizeUnit(raw);units[i].codes.forEach(c=>{if(String(c||'').trim())used.add(String(c).trim());});});units.forEach(u=>{if(!REFRESHABLE_UNITS.has(u.name))return;const required=REFRESHABLE_CODE_COUNTS[u.name]||u.codes.length;while(u.codes.length<required)u.codes.push('');const key=u.name||'وحدة',previous=Array.isArray(history[key])?history[key]:[];u.codes=u.codes.map(oldCode=>nextUniqueCode(codePrefix(oldCode),used,previous));u.codes.forEach(c=>used.add(c));syncUnitCode(units.indexOf(u));history[key]=[...previous,...u.codes].slice(-120);});saveCodeHistory(history);saveUnits();localStorage.setItem(LAST_CODE_REFRESH_KEY,String(Date.now()));renderUnits();updateRefreshStatus();if(showToast)toast('تم تحديث الأكواد مع الحفاظ على نوع كل كود وبدون تكرار');}
+function nextUniqueCode(prefix,used,history){
+  prefix=String(prefix||'E').toUpperCase();
+  for(let t=0;t<3000;t++){
+    const c=codeNumber(prefix);
+    if(!used.has(c)&&!history.includes(c))return c;
+  }
+  for(let n=1;n<=999;n++){
+    const c=`${prefix}-${String(n).padStart(3,'0')}`;
+    if(!used.has(c)&&!history.includes(c))return c;
+  }
+  // Extremely unlikely fallback: still preserve the original prefix.
+  return `${prefix}-001`;
+}
+function refreshCodes(showToast=true){
+  const history=loadCodeHistory(),used=new Set();
+
+  // Do not reorder units and do not touch fixed positions.
+  units=units.map(normalizeUnit);
+
+  // Reserve every existing code first so a refresh cannot duplicate a code.
+  units.forEach(u=>u.codes.forEach(c=>{
+    const value=String(c||'').trim().toUpperCase();
+    if(value)used.add(value);
+  }));
+
+  units.forEach(u=>{
+    if(!REFRESHABLE_UNITS.has(u.name))return;
+    const required=REFRESHABLE_CODE_COUNTS[u.name]||u.codes.length;
+    while(u.codes.length<required)u.codes.push('');
+
+    const key=u.name||'وحدة';
+    const previous=Array.isArray(history[key])?history[key]:[];
+    const oldCodes=u.codes.slice(0,required);
+    const newCodes=oldCodes.map(oldCode=>{
+      // The prefix is taken from THIS exact slot before generating its new number.
+      // Therefore P-, R-, H-, G-, or any other prefix stays the same.
+      const prefix=codePrefix(oldCode);
+      const next=nextUniqueCode(prefix,used,previous);
+      used.add(next);
+      return next;
+    });
+    u.codes.splice(0,required,...newCodes);
+    syncUnitCode(units.indexOf(u));
+    history[key]=[...previous,...newCodes].slice(-120);
+  });
+
+  saveCodeHistory(history);
+  saveUnits();
+  localStorage.setItem(LAST_CODE_REFRESH_KEY,String(Date.now()));
+  renderUnits();
+  updateRefreshStatus();
+  if(showToast)toast('تم تحديث الأكواد بدون حذف، مع الحفاظ على نوع كل كود P / R / H / G وبدون تكرار');
+}
 function updateRefreshStatus(){const el=$('codeRefreshStatus');if(!el)return;const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(!last){el.textContent='التحديث التلقائي كل 30 دقيقة';return;}const r=Math.max(0,CODE_REFRESH_MS-(Date.now()-last));if(!r){el.textContent='جاري تحديث الأكواد...';return;}el.textContent=`التحديث القادم بعد ${Math.floor(r/60000)}:${String(Math.floor(r%60000/1000)).padStart(2,'0')}`;}
 function checkAutoCodeRefresh(){const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(last&&Date.now()-last>=CODE_REFRESH_MS)refreshCodes(true);updateRefreshStatus();}
 function formatReportSection(unit){const codes=(Array.isArray(unit.codes)?unit.codes:[]).map(c=>String(c).trim()).filter(Boolean);if(!codes.length)return `${unit.name}: —`;return `${unit.name}:\n${codes.join('\n')}`;}
