@@ -46,10 +46,38 @@ function setNow(){
   updatePreview();
 }
 
+function isFieldSupervisor(u){
+  return u.name === 'مشرف ميداني' || /^مشرف ميداني \d+$/.test(u.name);
+}
+
+function nextSupervisorNumber(){
+  const numbers = units
+    .filter(isFieldSupervisor)
+    .map(u => {
+      const match = u.name.match(/(\d+)$/);
+      return match ? Number(match[1]) : 1;
+    });
+  return Math.max(1, ...numbers) + 1;
+}
+
+function addFieldSupervisor(afterIndex){
+  const number = nextSupervisorNumber();
+  units.splice(afterIndex + 1, 0, {
+    name: `مشرف ميداني ${number}`,
+    code: ''
+  });
+  saveUnits();
+  renderUnits();
+  toast(`تمت إضافة مشرف ميداني ${number}`);
+}
+
 function renderUnits(){
   $('unitList').innerHTML = units.map((u,i) => `
-    <div class="unit-row">
-      <span class="unit-name">${escapeHtml(u.name)}</span>
+    <div class="unit-row ${isFieldSupervisor(u) ? 'supervisor-row' : ''}">
+      <div class="unit-name-wrap">
+        <span class="unit-name">${escapeHtml(u.name)}</span>
+        ${isFieldSupervisor(u) ? `<button class="add-inline" data-add-supervisor="${i}" title="إضافة مشرف ميداني تحته">+</button>` : ''}
+      </div>
       <input class="unit-code-input" data-code-index="${i}" value="${escapeAttr(u.code || '')}" placeholder="E-000" aria-label="كود ${escapeAttr(u.name)}" />
     </div>
   `).join('');
@@ -60,6 +88,12 @@ function renderUnits(){
       units[i].code = e.target.value.trim();
       saveUnits();
       updatePreview();
+    });
+  });
+
+  document.querySelectorAll('[data-add-supervisor]').forEach(button => {
+    button.addEventListener('click', e => {
+      addFieldSupervisor(Number(e.currentTarget.dataset.addSupervisor));
     });
   });
 
@@ -114,7 +148,6 @@ function refreshCodes(showToast=true){
 
   units.forEach(u=>{
     const key = u.name || 'وحدة';
-    const oldCodes = String(u.code || '').split('/').map(x=>x.trim()).filter(Boolean);
     const previous = Array.isArray(history[key]) ? history[key] : [];
     const count = key.includes('وحدات البحث والإنقاذ') ? 2 : 1;
     const newCodes = [];
