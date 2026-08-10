@@ -48,7 +48,14 @@
         </div>
 
         <div class="card report-card">
-          <div class="section-head"><div><span class="eyebrow">الوحدات</span><h3>الأقسام والأكواد</h3></div><button id="refreshTime" class="ghost">تحديث الوقت الآن</button></div>
+          <div class="section-head">
+            <div><span class="eyebrow">الوحدات</span><h3>الأقسام والأكواد</h3></div>
+            <div class="code-actions">
+              <span id="codeRefreshStatus" class="refresh-status">التحديث التلقائي كل 30 دقيقة</span>
+              <button id="refreshCodes" class="primary">🔄 تحديث الأكواد</button>
+              <button id="refreshTime" class="ghost">تحديث الوقت الآن</button>
+            </div>
+          </div>
           <div id="unitList" class="unit-list"></div>
         </div>
 
