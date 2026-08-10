@@ -66,12 +66,17 @@ function refreshCodes(showToast=true){
     const required=REFRESHABLE_CODE_COUNTS[u.name]||u.codes.length;
     while(u.codes.length<required) u.codes.push('');
     const key=u.name||'وحدة',previous=Array.isArray(history[key])?history[key]:[];
-    u.codes=u.codes.map(()=>nextUniqueCode(used,previous));
+    // الأكواد ذات البدايات غير E مثل P / R / H / G تبقى كما وضعها المستخدم ولا تُحذف عند التحديث.
+    u.codes=u.codes.map(code=>{
+      const value=String(code||'').trim();
+      if(value && !/^E-\d{3}$/i.test(value)) return value;
+      return nextUniqueCode(used,previous);
+    });
     u.codes.forEach(c=>used.add(c));
     syncUnitCode(index);
-    history[key]=[...previous,...u.codes].slice(-120);
+    history[key]=[...previous,...u.codes.filter(c=>/^E-\d{3}$/i.test(c))].slice(-120);
   });
-  saveCodeHistory(history);saveUnits();localStorage.setItem(LAST_CODE_REFRESH_KEY,String(Date.now()));renderUnits();updateRefreshStatus();if(showToast)toast('تم تحديث الأكواد بدون حذف أو تكرار');
+  saveCodeHistory(history);saveUnits();localStorage.setItem(LAST_CODE_REFRESH_KEY,String(Date.now()));renderUnits();updateRefreshStatus();if(showToast)toast('تم تحديث أكواد E فقط، وحفظ أكواد P و R و H و G بدون حذف أو تكرار');
 }
 function updateRefreshStatus(){const el=$('codeRefreshStatus');if(!el)return;const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(!last){el.textContent='التحديث التلقائي كل 30 دقيقة';return;}const r=Math.max(0,CODE_REFRESH_MS-(Date.now()-last));if(!r){el.textContent='جاري تحديث الأكواد...';return;}el.textContent=`التحديث القادم بعد ${Math.floor(r/60000)}:${String(Math.floor(r%60000/1000)).padStart(2,'0')}`;}
 function checkAutoCodeRefresh(){const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(last&&Date.now()-last>=CODE_REFRESH_MS)refreshCodes(true);updateRefreshStatus();}
