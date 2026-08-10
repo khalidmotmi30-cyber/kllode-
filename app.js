@@ -71,14 +71,16 @@ function refreshCodes(showToast=true){
 }
 function updateRefreshStatus(){const el=$('codeRefreshStatus');if(!el)return;const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(!last){el.textContent='التحديث التلقائي كل 30 دقيقة';return;}const r=Math.max(0,CODE_REFRESH_MS-(Date.now()-last));if(!r){el.textContent='جاري تحديث الأكواد...';return;}el.textContent=`التحديث القادم بعد ${Math.floor(r/60000)}:${String(Math.floor(r%60000/1000)).padStart(2,'0')}`;}
 function checkAutoCodeRefresh(){const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(last&&Date.now()-last>=CODE_REFRESH_MS)refreshCodes(true);updateRefreshStatus();}
+function formatReportSection(unit){
+  const codes=(Array.isArray(unit.codes)?unit.codes:[]).map(c=>String(c).trim()).filter(Boolean);
+  if(!codes.length) return `: ${unit.name} —`;
+  return `: ${unit.name}:\n${codes.join('\n')}`;
+}
 function updatePreview(){
   const no=$('reportNo').value||'—',day=$('reportDay').value||'—',date=$('reportDate').value||'—',time=$('reportTime').value||'—';
   const byName=new Map(units.map(u=>[u.name,u]));
   const ordered=FIXED_REPORT_ORDER.map(name=>byName.get(name)).filter(Boolean);
-  const sections=ordered.map(u=>{
-    const codes=(Array.isArray(u.codes)?u.codes:[]).map(c=>String(c).trim()).filter(Boolean);
-    return `: ${u.name}${codes.length?'\n'+codes.join('\n'):' —'}`;
-  });
+  const sections=ordered.map(formatReportSection);
   $('reportPreview').textContent=`تم تحديث تقرير عمليات ( ساندي و بوليتو ) رقم ( ${no} ) في تمام الساعه ( ${time} ) في يوم ( ${day} ) التاريخ ${date}\n\n`+sections.join('\n\n');
 }
 function escapeHtml(s){return String(s??'').replace(/[&<>"\\]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\\':'&#92;'}[c]||c));}
