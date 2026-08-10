@@ -58,25 +58,39 @@ function renderAdmin(){
 }
 function codeNumber(){return `E-${String(Math.floor(Math.random()*999)+1).padStart(3,'0')}`;}
 function nextUniqueCode(used,history){for(let t=0;t<3000;t++){const c=codeNumber();if(!used.has(c)&&!history.includes(c))return c;}return codeNumber();}
+function isRefreshableECode(value){return /^E-\d{3}$/i.test(String(value||'').trim());}
 function refreshCodes(showToast=true){
   const history=loadCodeHistory(),used=new Set();
-  units.forEach((raw,i)=>{units[i]=normalizeUnit(raw);units[i].codes.forEach(c=>{if(c)used.add(c);});});
+  // حفظ كل الأكواد اليدوية غير E قبل التحديث، حتى لا تتغير P/R/H/G بالخطأ.
+  const manualCodes=new Map();
+  units.forEach((raw,i)=>{
+    units[i]=normalizeUnit(raw);
+    const manual=[];
+    units[i].codes.forEach((c,j)=>{
+      const value=String(c||'').trim();
+      if(value) used.add(value);
+      if(value && !isRefreshableECode(value)) manual.push({index:j,value});
+    });
+    manualCodes.set(i,manual);
+  });
   units.forEach((u,index)=>{
     if(!REFRESHABLE_UNITS.has(u.name)) return;
     const required=REFRESHABLE_CODE_COUNTS[u.name]||u.codes.length;
     while(u.codes.length<required) u.codes.push('');
     const key=u.name||'وحدة',previous=Array.isArray(history[key])?history[key]:[];
-    // الأكواد ذات البدايات غير E مثل P / R / H / G تبقى كما وضعها المستخدم ولا تُحذف عند التحديث.
     u.codes=u.codes.map(code=>{
       const value=String(code||'').trim();
-      if(value && !/^E-\d{3}$/i.test(value)) return value;
+      // التحديث يغيّر E-### فقط. أي بادئة أخرى تبقى كما كتبها المستخدم.
+      if(value && !isRefreshableECode(value)) return value;
       return nextUniqueCode(used,previous);
     });
-    u.codes.forEach(c=>used.add(c));
+    // استرجاع الأكواد اليدوية في نفس أماكنها، بدون حذف أو استبدال.
+    (manualCodes.get(index)||[]).forEach(item=>{u.codes[item.index]=item.value;});
+    u.codes.forEach(c=>{if(c) used.add(String(c).trim());});
     syncUnitCode(index);
-    history[key]=[...previous,...u.codes.filter(c=>/^E-\d{3}$/i.test(c))].slice(-120);
+    history[key]=[...previous,...u.codes.filter(isRefreshableECode)].slice(-120);
   });
-  saveCodeHistory(history);saveUnits();localStorage.setItem(LAST_CODE_REFRESH_KEY,String(Date.now()));renderUnits();updateRefreshStatus();if(showToast)toast('تم تحديث أكواد E فقط، وحفظ أكواد P و R و H و G بدون حذف أو تكرار');
+  saveCodeHistory(history);saveUnits();localStorage.setItem(LAST_CODE_REFRESH_KEY,String(Date.now()));renderUnits();updateRefreshStatus();if(showToast)toast('تم تحديث أكواد E فقط، وأكواد P وR وH وG محفوظة بدون تغيير أو حذف');
 }
 function updateRefreshStatus(){const el=$('codeRefreshStatus');if(!el)return;const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(!last){el.textContent='التحديث التلقائي كل 30 دقيقة';return;}const r=Math.max(0,CODE_REFRESH_MS-(Date.now()-last));if(!r){el.textContent='جاري تحديث الأكواد...';return;}el.textContent=`التحديث القادم بعد ${Math.floor(r/60000)}:${String(Math.floor(r%60000/1000)).padStart(2,'0')}`;}
 function checkAutoCodeRefresh(){const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(last&&Date.now()-last>=CODE_REFRESH_MS)refreshCodes(true);updateRefreshStatus();}
