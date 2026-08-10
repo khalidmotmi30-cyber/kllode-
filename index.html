@@ -26,6 +26,16 @@
         </div>
         <div class="card report-card"><div class="section-head"><div><span class="eyebrow">الوحدات</span><h3>الأقسام والأكواد</h3></div><div class="code-actions"><span id="codeRefreshStatus" class="refresh-status">التحديث التلقائي كل 30 دقيقة</span><button id="refreshCodes" class="primary">🔄 تحديث الأكواد</button><button id="refreshTime" class="ghost">تحديث الوقت الآن</button></div></div><div id="unitList" class="unit-list"></div></div>
         <div class="card preview-card"><div class="section-head"><div><span class="eyebrow">المعاينة</span><h3>النص الجاهز</h3></div></div><pre id="reportPreview"></pre></div>
+
+        <div class="hero card los-report-hero"><div><span class="eyebrow">التقرير الرسمي</span><h2>لوس سانتوس</h2><p>تقرير مستقل عن ساندي و بوليتو، بنفس طريقة إدخال الأكواد والتحديث والمعاينة.</p></div><button id="copyLosReport" class="primary">نسخ تقرير لوس</button></div>
+        <div class="grid form-grid">
+          <label class="field"><span>رقم التقرير</span><input id="losReportNo" placeholder="مثال: 25" /></label>
+          <label class="field"><span>اليوم</span><input id="losReportDay" placeholder="مثال: الثلاثاء" /></label>
+          <label class="field"><span>التاريخ</span><input id="losReportDate" type="text" inputmode="numeric" dir="ltr" lang="en" placeholder="11/08/2026" autocomplete="off" /></label>
+          <label class="field"><span>الوقت</span><input id="losReportTime" type="text" inputmode="numeric" dir="ltr" lang="en" placeholder="00:00 ص" autocomplete="off" /></label>
+        </div>
+        <div class="card report-card"><div class="section-head"><div><span class="eyebrow">لوس سانتوس</span><h3>الأقسام والأكواد</h3></div><div class="code-actions"><span id="losCodeRefreshStatus" class="refresh-status">تحديث الأكواد كل 30 دقيقة</span><button id="refreshLosCodes" class="primary">🔄 تحديث أكواد لوس</button><button id="refreshLosTime" class="ghost">تحديث الوقت الآن</button></div></div><div id="losUnitList" class="unit-list"></div></div>
+        <div class="card preview-card"><div class="section-head"><div><span class="eyebrow">المعاينة</span><h3>تقرير لوس سانتوس الجاهز</h3></div></div><pre id="losReportPreview"></pre></div>
       </section>
       <section id="unitsView" class="view"><div class="card"><div class="section-head"><div><span class="eyebrow">الإعدادات</span><h2>إدارة الوحدات والأكواد</h2></div><button id="addUnit" class="primary">+ إضافة وحدة</button></div><p class="muted">يمكنك تعديل الاسم والكود من هنا أيضًا. التعديلات تحفظ على هذا المتصفح.</p><div id="adminList" class="admin-list"></div><div class="actions"><button id="resetUnits" class="danger ghost">إعادة الوحدات الافتراضية</button></div></div></section>
     </main>
