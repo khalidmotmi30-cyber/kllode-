@@ -31,14 +31,26 @@ function renderUnits(){
     html.push(`<div class="unit-row"><div class="unit-name-wrap"><span class="unit-name">${escapeHtml(u.name)}</span></div><div class="codes-stack">${u.codes.map((code,j)=>`<div class="code-line"><input class="unit-code-input" data-code-index="${i}" data-code-item="${j}" value="${escapeAttr(code)}" placeholder="E-000" aria-label="كود ${escapeAttr(u.name)} ${j+1}" />${u.codes.length>1 && !(u.name==='سين' && u.codes.length<=4)?`<button class="remove-code" data-remove-code="${i}" data-remove-item="${j}" title="حذف الكود">×</button>`:''}</div>`).join('')}</div><div class="unit-add-row"><button class="add-inline" data-add-code="${i}" title="إضافة كود">＋ إضافة كود</button></div></div>`);
   });
   $('unitList').innerHTML=html.join('');
-  document.querySelectorAll('[data-code-index]').forEach(input=>input.addEventListener('input',e=>{const i=+e.target.dataset.codeIndex,j=+e.target.dataset.codeItem;units[i].codes[j]=e.target.value.trim();syncUnitCode(i);saveUnits();updatePreview();}));
+  document.querySelectorAll('[data-code-index]').forEach(input=>input.addEventListener('input',e=>{const i=+e.target.dataset.codeIndex,j=+e.target.dataset.codeItem;units[i].codes[j]=e.target.value.trim();syncUnitCode(i);handleLogoutCodeChange(i);saveUnits();updatePreview();}));
   document.querySelectorAll('[data-add-code]').forEach(b=>b.addEventListener('click',()=>addCode(+b.dataset.addCode)));
   document.querySelectorAll('[data-remove-code]').forEach(b=>b.addEventListener('click',()=>removeCode(+b.dataset.removeCode,+b.dataset.removeItem)));
   renderAdmin();updatePreview();
 }
+function handleLogoutCodeChange(index){
+  const unit=units[index];
+  if(unit.name!=='تسجيل خروج') return;
+  const logoutCodes=new Set(unit.codes.map(c=>c.trim()).filter(Boolean));
+  if(!logoutCodes.size) return;
+  units.forEach((u,i)=>{
+    if(i===index) return;
+    if(!Array.isArray(u.codes)) return;
+    u.codes=u.codes.map(c=>logoutCodes.has(c.trim())?'':c);
+    syncUnitCode(i);
+  });
+}
 function renderAdmin(){
   $('adminList').innerHTML=units.map((u,i)=>`<div class="admin-row"><span>${i+1}</span><input data-index="${i}" data-field="name" value="${escapeAttr(u.name)}" /><input data-index="${i}" data-field="code" value="${escapeAttr(u.code||'')}" placeholder="E-000 / E-000" /><button data-delete="${i}">حذف</button></div>`).join('');
-  document.querySelectorAll('#adminList input').forEach(el=>el.addEventListener('input',e=>{const i=+e.target.dataset.index,f=e.target.dataset.field;if(f==='code'){units[i].codes=e.target.value.split('/').map(s=>s.trim()).filter(Boolean);if(!units[i].codes.length)units[i].codes=[''];}units[i][f]=e.target.value;syncUnitCode(i);saveUnits();renderUnits();}));
+  document.querySelectorAll('#adminList input').forEach(el=>el.addEventListener('input',e=>{const i=+e.target.dataset.index,f=e.target.dataset.field;if(f==='code'){units[i].codes=e.target.value.split('/').map(s=>s.trim()).filter(Boolean);if(!units[i].codes.length)units[i].codes=[''];}units[i][f]=e.target.value;syncUnitCode(i);handleLogoutCodeChange(i);saveUnits();renderUnits();}));
   document.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>{units.splice(+b.dataset.delete,1);saveUnits();renderUnits();}));
 }
 function codeNumber(){return `E-${String(Math.floor(Math.random()*999)+1).padStart(3,'0')}`;}
@@ -47,9 +59,6 @@ function refreshCodes(showToast=true){
   const history=loadCodeHistory(),used=new Set();
   units.forEach(u=>u.codes.forEach(c=>{if(c)used.add(c);}));
   units.forEach((u,index)=>{
-    // فقط الوحدات التشغيلية التالية تتغير عند تحديث الأكواد:
-    // سين، سين 1، باء، باء 1، جيم 1، جيم 2.
-    // القيادة والإشراف والعمليات ونائب العمليات والدعم والميناء والبحث والإنقاذ وتسجيل الخروج تبقى كما هي.
     if(!REFRESHABLE_UNITS.has(u.name)) return;
     const key=u.name||'وحدة',previous=Array.isArray(history[key])?history[key]:[];
     u.codes=u.codes.map(()=>nextUniqueCode(used,previous));
@@ -57,7 +66,7 @@ function refreshCodes(showToast=true){
     syncUnitCode(index);
     history[key]=[...previous,...u.codes].slice(-120);
   });
-  saveCodeHistory(history);saveUnits();localStorage.setItem(LAST_CODE_REFRESH_KEY,String(Date.now()));renderUnits();updateRefreshStatus();if(showToast)toast('تم تحديث أكواد الوحدات التشغيلية فقط');
+  saveCodeHistory(history);saveUnits();localStorage.setItem(LAST_CODE_REFRESH_KEY,String(Date.now()));renderUnits();updateRefreshStatus();if(showToast)toast('تم تحديث أكواد الوحدات التشغيلية فقط وبدون تكرار');
 }
 function updateRefreshStatus(){const el=$('codeRefreshStatus');if(!el)return;const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(!last){el.textContent='التحديث التلقائي كل 30 دقيقة';return;}const r=Math.max(0,CODE_REFRESH_MS-(Date.now()-last));if(!r){el.textContent='جاري تحديث الأكواد...';return;}el.textContent=`التحديث القادم بعد ${Math.floor(r/60000)}:${String(Math.floor(r%60000/1000)).padStart(2,'0')}`;}
 function checkAutoCodeRefresh(){const last=+(localStorage.getItem(LAST_CODE_REFRESH_KEY)||0);if(last&&Date.now()-last>=CODE_REFRESH_MS)refreshCodes(true);updateRefreshStatus();}
