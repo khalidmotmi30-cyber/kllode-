@@ -1,4 +1,7 @@
 const STORAGE_KEY = 'operations-dashboard-units-v1';
+const CODE_HISTORY_KEY = 'operations-dashboard-code-history-v1';
+const LAST_CODE_REFRESH_KEY = 'operations-dashboard-last-code-refresh-v1';
+const CODE_REFRESH_MS = 30 * 60 * 1000;
 let units = loadUnits();
 
 const $ = (id) => document.getElementById(id);
@@ -13,6 +16,18 @@ function loadUnits(){
 
 function saveUnits(){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(units));
+}
+
+function loadCodeHistory(){
+  try {
+    const saved = JSON.parse(localStorage.getItem(CODE_HISTORY_KEY));
+    if(saved && typeof saved === 'object') return saved;
+  } catch(e){}
+  return {};
+}
+
+function saveCodeHistory(history){
+  localStorage.setItem(CODE_HISTORY_KEY, JSON.stringify(history));
 }
 
 function now(){
@@ -77,6 +92,77 @@ function renderAdmin(){
   }));
 }
 
+function codeNumber(){
+  return `E-${String(Math.floor(Math.random()*999)+1).padStart(3,'0')}`;
+}
+
+function nextUniqueCode(used, history){
+  for(let tries=0; tries<3000; tries++){
+    const code = codeNumber();
+    if(!used.has(code) && !history.includes(code)) return code;
+  }
+  for(let n=1;n<=999;n++){
+    const code=`E-${String(n).padStart(3,'0')}`;
+    if(!used.has(code) && !history.includes(code)) return code;
+  }
+  return codeNumber();
+}
+
+function refreshCodes(showToast=true){
+  const history = loadCodeHistory();
+  const used = new Set();
+
+  units.forEach(u=>{
+    const key = u.name || 'وحدة';
+    const oldCodes = String(u.code || '').split('/').map(x=>x.trim()).filter(Boolean);
+    const previous = Array.isArray(history[key]) ? history[key] : [];
+    const count = key.includes('وحدات البحث والإنقاذ') ? 2 : 1;
+    const newCodes = [];
+
+    for(let i=0;i<count;i++){
+      const code = nextUniqueCode(used, previous);
+      used.add(code);
+      newCodes.push(code);
+    }
+
+    u.code = newCodes.join(' / ');
+    history[key] = [...previous, ...newCodes].slice(-120);
+  });
+
+  saveCodeHistory(history);
+  saveUnits();
+  localStorage.setItem(LAST_CODE_REFRESH_KEY, String(Date.now()));
+  renderUnits();
+  updateRefreshStatus();
+  if(showToast) toast('تم تحديث الأكواد — لن يتكرر الكود السابق لنفس الوحدة');
+}
+
+function updateRefreshStatus(){
+  const el = $('codeRefreshStatus');
+  if(!el) return;
+  const last = Number(localStorage.getItem(LAST_CODE_REFRESH_KEY) || 0);
+  if(!last){
+    el.textContent = 'التحديث التلقائي كل 30 دقيقة';
+    return;
+  }
+  const remaining = Math.max(0, CODE_REFRESH_MS - (Date.now() - last));
+  if(remaining === 0){
+    el.textContent = 'جاري تحديث الأكواد...';
+    return;
+  }
+  const minutes = Math.floor(remaining / 60000);
+  const seconds = Math.floor((remaining % 60000) / 1000);
+  el.textContent = `التحديث القادم بعد ${minutes}:${String(seconds).padStart(2,'0')}`;
+}
+
+function checkAutoCodeRefresh(){
+  const last = Number(localStorage.getItem(LAST_CODE_REFRESH_KEY) || 0);
+  if(last && Date.now() - last >= CODE_REFRESH_MS){
+    refreshCodes(true);
+  }
+  updateRefreshStatus();
+}
+
 function updatePreview(){
   const no=$('reportNo').value || '—';
   const day=$('reportDay').value || '—';
@@ -93,6 +179,7 @@ function escapeAttr(s){return escapeHtml(s).replace(/'/g,'&#39;');}
 
 ['reportNo','reportDay','reportDate','reportTime'].forEach(id=>$(id).addEventListener('input',updatePreview));
 $('refreshTime').addEventListener('click',setNow);
+$('refreshCodes').addEventListener('click',()=>refreshCodes(true));
 $('copyReport').addEventListener('click',async()=>{
   try{
     await navigator.clipboard.writeText($('reportPreview').textContent);
@@ -133,3 +220,5 @@ function toast(text){
 
 setNow();
 renderUnits();
+updateRefreshStatus();
+setInterval(checkAutoCodeRefresh, 1000);
